@@ -143,7 +143,7 @@ class PowerBICustomVisualsWebpackPlugin {
 			getCapabilities(options).then((capabilities) =>
 				scriptVisual.patchCababilities(options, capabilities)
 			),
-			this.getAssetsContent(compilation.assets),
+			this.getAssetsContent(compilation.assets, options),
 		])
 			.then(
 				([
@@ -180,19 +180,50 @@ class PowerBICustomVisualsWebpackPlugin {
 		);
 	}
 
-	getAssetsContent(assets) {
-		let assetsContent = {};
+	async getAssetsContent(assets, options) {
+		let assetsContent = {
+			jsContent: null,
+			cssContent: null
+		};
+		const sourcePromises = [];
+
 		for (let asset in assets) {
 			const extension = asset.split(".").pop();
-			const content = assets[asset].source();
+			let content = assets[asset].source();
 
 			if (extension === "js") {
 				assetsContent.jsContent = content;
+				if (options.externalJS && options.externalJS.length) {
+					sourcePromises.push(
+						this.appendExternalJS(options.externalJS)
+					);
+					sourcePromises.push(
+						Promise.resolve("var globalPowerbi = powerbi;")
+					);
+				}
 			} else if (extension === "css") {
 				assetsContent.cssContent = content;
 			}
 		}
-		return assetsContent;
+
+		return Promise.all(sourcePromises).then((chunks) => {
+			if (assetsContent.jsContent) {
+				assetsContent.jsContent = chunks.join("\n")
+					+ "\n"
+					+ assetsContent.jsContent;
+			}
+			return assetsContent;
+		});
+	}
+
+	async appendExternalJS(externalJS) {
+		return Promise.all(
+			externalJS.map((path) =>
+				fs.readFile(path, ENCODING).catch((err) => {
+					logger.warn(err.message);
+				})
+			)
+		).then((results) => results.join(""));
 	}
 
 	async _beforeCompile(callback) {
@@ -239,6 +270,8 @@ class PowerBICustomVisualsWebpackPlugin {
 			visualGuid: this.options.visual.guid,
 			visualClass: this.options.visual.visualClassName,
 			visualDisplayName: this.options.visual.displayName,
+			powerbiVisualsApi: this.options.visual.powerbiVisualsApi
+				?? "powerbi-visuals-api",
 			visualVersion: this.options.visual.version,
 			apiVersion: this.options.apiVersion,
 			visualSourceLocation: this.options.visualSourceLocation,
