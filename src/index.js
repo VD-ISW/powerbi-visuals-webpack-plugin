@@ -228,9 +228,6 @@ class PowerBICustomVisualsWebpackPlugin {
 
 	async _beforeCompile(callback) {
 		if (!this.options.modules) callback();
-		if (this.options.externalJS && this.options.externalJS.length) {
-			throw new Error("externalJS option is not supported anymore");
-		}
 		if (this.options.generatePlugin) {
 			logger.info("Start preparing plugin template");
 			await this.generateVisualPlugin()
